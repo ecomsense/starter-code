@@ -1,21 +1,27 @@
 from traceback import print_exc
-from omspy_brokers.finvasia import Finvasia
-from toolkit.fileutils import Fileutils
-
-
-def send_messages(msg):
-    print(msg)
+from importlib import import_module
+from constants import O_CNFG, logging
 
 
 def login():
-    O_CNFG = Fileutils().get_lst_fm_yml("../code_starter.yml")
-    api = Finvasia(**O_CNFG)
-    if api.authenticate():
-        message = "api connected"
-        send_messages(message)
-        return api
+    broker_name = O_CNFG.get("broker", None)
+    if not broker_name:
+        raise ValueError("broker not specified in credential file")
+
+    # Dynamically import the broker module
+    module_path = f"{broker_name}.{broker_name}"
+    broker_module = import_module(module_path)
+
+    logging.info(f"BrokerClass: {broker_module}")
+    # Get the broker class (assuming class name matches the broker name)
+    BrokerClass = getattr(broker_module, broker_name.capitalize())
+
+    # Initialize API with config
+    broker_object = BrokerClass(**O_CNFG)
+    if broker_object.authenticate():
+        logging.info("api connected")
+        return broker_object
     else:
-        send_messages("Failed to authenticate. .. exiting")
         __import__("sys").exit(1)
 
 
@@ -23,11 +29,14 @@ class Helper:
     _api = None
 
     @classmethod
-    @property
     def api(cls):
         if cls._api is None:
             cls._api = login()
         return cls._api
+
+    @classmethod
+    def orders(cls):
+        return cls._api.orders
 
     @classmethod
     def ltp(cls, exchange, token):
@@ -39,7 +48,7 @@ class Helper:
                 raise ValueError("ltp is none")
         except Exception as e:
             message = f"{e} while ltp"
-            send_messages(message)
+            logging.error(message)
             print_exc()
 
     @classmethod
@@ -56,13 +65,13 @@ class Helper:
                 exchange="NFO",
                 tag="stop",
             )
-            send_messages(str(bargs))
+            logging.error(str(bargs))
             sl1 = cls._api.order_place(**bargs)
-            send_messages(f"api responded with {sl1}")
+            logging.debug(f"api responded with {sl1}")
 
             if sl1:
                 sl2 = cls._api.order_place(**bargs)
-                send_messages(f"api responded with {sl2}")
+                logging.debug(f"api responded with {sl2}")
                 if sl2:
                     sargs = dict(
                         symbol=symbol,
@@ -75,13 +84,13 @@ class Helper:
                         exchange="NFO",
                         tag="enter",
                     )
-                    send_messages(str(sargs))
+                    logging.debug(str(sargs))
                     resp = cls._api.order_place(**sargs)
-                    send_messages(f"api responded with {resp}")
+                    logging.debug(f"api responded with {resp}")
                     return [sl1, sl2], bargs
         except Exception as e:
             message = f"helper error {e} while placing order"
-            send_messages(message)
+            logging.error(message)
             print_exc()
 
     @classmethod
@@ -93,7 +102,7 @@ class Helper:
                 quantity = abs(pos["quantity"])
                 quantity = int(quantity / 2) if half else quantity
 
-            send_messages(f"trying to close {pos['symbol']}")
+            logging.debug(f"trying to close {pos['symbol']}")
             if pos["quantity"] < 0:
                 args = dict(
                     symbol=pos["symbol"],
@@ -106,7 +115,7 @@ class Helper:
                     tag="close",
                 )
                 resp = cls._api.order_place(**args)
-                send_messages(f"api responded with {resp}")
+                logging.debug(f"api responded with {resp}")
             elif quantity > 0:
                 args = dict(
                     symbol=pos["symbol"],
@@ -119,7 +128,7 @@ class Helper:
                     tag="close",
                 )
                 resp = cls._api.order_place(**args)
-                send_messages(f"api responded with {resp}")
+                logging.debug(f"api responded with {resp}")
 
     @classmethod
     def mtm(cls):
@@ -142,12 +151,12 @@ class Helper:
                     pnl += pos["urmtom"]
         except Exception as e:
             message = f"while calculating {e}"
-            send_messages(f"api responded with {message}")
+            logging.error(f"api responded with {message}")
         finally:
             return pnl
 
 
 if __name__ == "__main__":
-    Helper.api
+    Helper.api()
     resp = Helper._api.finvasia.get_order_book()
     print(resp)
