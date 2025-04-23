@@ -9,7 +9,7 @@ def login():
         raise ValueError("broker not specified in credential file")
 
     # Dynamically import the broker module
-    module_path = f"{broker_name}.{broker_name}"
+    module_path = f"stock_brokers.{broker_name}.{broker_name}"
     broker_module = import_module(module_path)
 
     logging.info(f"BrokerClass: {broker_module}")
