@@ -1,23 +1,23 @@
 from traceback import print_exc
 
 import pendulum as pdlm
-from src.constants import yml_to_obj
-from src.core.builder import Builder
+from src.constants import yml_to_obj, S_DATA
+from toolkit.fileutils import Fileutils
+from toolkit.kokoo import blink
 
 
 
-def get_bypass():
+def get_bypass(O_CNFG):
     from stock_brokers.bypass.bypass import Bypass
 
     try:
 
-        O_CNFG = yml_to_obj()
         if isinstance(O_CNFG, dict):
             dct = O_CNFG["bypass"]
 
             tokpath = S_DATA + dct["userid"] + ".txt"
             enctoken = None
-            if not O_FUTL.is_file_not_2day(tokpath):
+            if not Fileutils().is_file_not_2day(tokpath):
                 print(f"{tokpath} modified today ... reading {enctoken}")
                 with open(tokpath, "r") as tf:
                     enctoken = tf.read()
@@ -43,10 +43,9 @@ def get_bypass():
         return bypass
 
 
-def get_zerodha():
+def get_zerodha(O_CNFG):
     try:
         from stock_brokers.zerodha.zerodha import Zerodha
-        O_CNFG = yml_to_obj()
 
         zera = None
         if isinstance(O_CNFG, dict):
@@ -65,7 +64,7 @@ def get_zerodha():
     except Exception as e:
         print(f"exception while creating zerodha object {e}")
         # remove_token(tokpath)
-        get_zerodha()
+        get_zerodha(O_CNFG)
     else:
         return zera
 
@@ -75,24 +74,35 @@ def remove_token(tokpath):
 
 
 def login():
+    O_CNFG = yml_to_obj()
     if isinstance(O_CNFG, dict):
         if O_CNFG["broker"] == "bypass":
-            return get_bypass()
+            return get_bypass(O_CNFG)
         else:
-            return get_zerodha()
+            return get_zerodha(O_CNFG)
     else:
-        print("please configure the settings properly")
-
+        print(f"please configure {O_CNFG} the settings properly")
 
 class Helper:
-    api_object = None
-    baseline = {}
+    _api = None
 
     @classmethod
     def api(cls):
-        if cls.api_object is None:
-            cls.api_object = login()
-        return cls.api_object
+        if cls._api is None:
+            cls._api = login()
+            cls._rest = RestApi(cls._api)
+            #ws = Wserver(cls._api, ["NSE:24"])
+            cls._quote = QuoteApi(ws=None)
+        cls.wait_till = pdlm.now().add(seconds=1)
+        return cls._api
+
+class RestApi:
+
+    baseline = {}
+
+    def __init__(self, session):
+        self._api = session
+
 
     @classmethod
     def _get_history(cls, instrument_token):
@@ -115,6 +125,66 @@ class Helper:
     @classmethod
     def history(cls, instrument_token):
         return cls.baseline.get(instrument_token, cls._get_history(instrument_token))
+
+
+
+
+class QuoteApi:
+    subscribed = {}
+
+    def __init__(self, ws):
+        self._ws = ws
+
+    def get_quotes(self):
+        try:
+            quote = {}
+            ltps = self._ws.ltp
+            quote = {
+                symbol: ltps.get(values["key"])
+                for symbol, values in self.subscribed.items()
+            }
+        except Exception as e:
+            logging.error(f"{e} while getting quote")
+            print_exc()
+        finally:
+            return quote
+
+    def _subscribe_till_ltp(self, ws_key):
+        try:
+            quotes = self._ws.ltp
+            ltp = quotes.get(ws_key, None)
+            while ltp is None:
+                self._ws.subscribe([ws_key])
+                quotes = self._ws.ltp
+                ltp = quotes.get(ws_key, None)
+                print(f"trying to get quote for {ws_key} {ltp}")
+                blink()
+        except Exception as e:
+            logging.error(f"{e} while get ltp")
+            print_exc()
+
+    def symbol_info(self, exchange, symbol, token=None):
+        try:
+            if self.subscribed.get(symbol, None) is None:
+                if token is None:
+                    logging.info(f"Helper: getting token for {exchange} {symbol}")
+                    token = str(self._ws.api.instrument_symbol(exchange, symbol))
+                key = exchange + "|" + str(token)
+                self.subscribed[symbol] = {
+                    "symbol": symbol,
+                    "key": key,
+                    "token": token,
+                    "ltp": self._subscribe_till_ltp(key),
+                }
+            if self.subscribed.get(symbol, None) is not None:
+                quotes = self._ws.ltp
+                ws_key = self.subscribed[symbol]["key"]
+                self.subscribed[symbol]["ltp"] = float(quotes[ws_key])
+                return self.subscribed[symbol]
+        except Exception as e:
+            logging.error(f"{e} while symbol info")
+            print_exc()
+
 
 
 if __name__ == "__main__":

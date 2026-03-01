@@ -1,10 +1,11 @@
 wheel
 setuptools==58.2.0
-pyOpenssl==21.0
+pyOpenSSL==24.0.0
 numpy==1.26.4
 pandas
 PyYAML
 pendulum
 pyotp
+requests
 git+https://github.com/ecomsense/stock-brokers
 git+https://github.com/pannet1/toolkit

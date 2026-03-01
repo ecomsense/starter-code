@@ -51,6 +51,7 @@ def yml_to_obj(arg=None):
     else:
         file = S_DATA + arg
 
+    print(f"resolved {file}")
     flag = futl.is_file_exists(file)
     if not flag and arg:
         print(f"using default {file=}")
