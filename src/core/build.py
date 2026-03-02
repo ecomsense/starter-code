@@ -17,8 +17,13 @@ class Builder:
         Retrieves tokens for all trading symbols.
         """
         try:
+
             # explode k = NIFTY, v = {settings}
             for k, settings in self._data.items():
+
+                if k not in symbol_factory:
+                    self._data[k] = settings
+                    continue
                 # find a matching symbol based on the user settings trade key
                 # example settings["NIFTY"]
                 assert isinstance(symbol_factory, dict), "symbol_factory is not a dict"
@@ -59,7 +64,23 @@ class Builder:
             return True
         return False
 
+    def find_expiry(self):
+        print("not implemented yet")
+        return self
 
+def find_atm_fm_ltp():
+    print("find atm fm ltp")
+
+def stuff_atm(data, meta):
+    print("stuff atm")
+    return data
+
+def stuff_tradingsymbols(data, meta):
+    merge = {}
+    for v in data.values():
+        merge = v | meta
+    lst = [merge]
+    return lst
 
 if __name__ == "__main__":
     try:

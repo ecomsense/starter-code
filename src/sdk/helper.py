@@ -1,10 +1,12 @@
 from traceback import print_exc
 
 import pendulum as pdlm
-from src.constants import yml_to_obj, S_DATA
+from src.constants import yml_to_obj, S_DATA, logging_func
+from src.sdk.wserver import Wserver
 from toolkit.fileutils import Fileutils
 from toolkit.kokoo import blink
 
+logging = logging_func(__name__)
 
 
 def get_bypass(O_CNFG):
@@ -91,23 +93,22 @@ class Helper:
         if cls._api is None:
             cls._api = login()
             cls._rest = RestApi(cls._api)
-            #ws = Wserver(cls._api, ["NSE:24"])
-            cls._quote = QuoteApi(ws=None)
+            ws = Wserver(cls._api, ["NSE:24"])
+            cls._quote = QuoteApi(ws)
         cls.wait_till = pdlm.now().add(seconds=1)
         return cls._api
 
 class RestApi:
 
-    baseline = {}
 
     def __init__(self, session):
         self._api = session
+        self.baseline = {}
 
 
-    @classmethod
-    def _get_history(cls, instrument_token):
+    def _get_history(self, instrument_token):
         try:
-            broker_object = cls.api()
+            broker_object = self._api
             kwargs = dict(
                 instrument_token=instrument_token,
                 from_date=pdlm.now("Asia/Kolkata").subtract(days=6).to_date_string(),
@@ -116,26 +117,38 @@ class RestApi:
             )
             lst = broker_object.historical(kwargs)
             if isinstance(lst, list) and len(lst) > 0:
-                cls.baseline[instrument_token] = lst[-1].get("close", 0)
-                return cls.baseline[instrument_token]
+                self.baseline[instrument_token] = lst[-1].get("close", 0)
+                return self.baseline[instrument_token]
             return 0
         except Exception as e:
             print(f"{e} exception while getting history")
 
-    @classmethod
-    def history(cls, instrument_token):
-        return cls.baseline.get(instrument_token, cls._get_history(instrument_token))
+    def history(self, instrument_token):
+        return self.baseline.get(instrument_token, self._get_history(instrument_token))
+
+    def weekly(self, instrument_token):
+        broker_object = self._api
+        kwargs = dict(
+            instrument_token=instrument_token,
+            from_date=pdlm.now("Asia/Kolkata").subtract(years=5).to_date_string(),
+            to_date=pdlm.now("Asia/Kolkata").to_date_string(),
+            interval="week",
+        )
+        lst = broker_object.historical(kwargs)
+        return lst
 
 
+    def trades(self):
+        return []
 
 
 class QuoteApi:
     subscribed = {}
+
+    def __init__(self, ws):
+        self._ws = ws
 
-    def __init__(self, ws):
-        self._ws = ws
-
-    def get_quotes(self):
+    def get_quotes(self):
         try:
             quote = {}
             ltps = self._ws.ltp

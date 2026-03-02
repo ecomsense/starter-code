@@ -1,0 +1,11 @@
+trade:
+  strategy: rachet
+  start_time: "2:18"
+  stop_time: "23:00"
+  live: 1      # 0 for paper 1 for live
+ITBEES:
+  tradingsymbol: ITBEES
+  instrument_token: 4885505
+  exchange: NSE
+  quantity: 33
+  txn: 0.1

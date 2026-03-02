@@ -5,10 +5,11 @@ from src.constants import (
     TradeSet,
     yml_to_obj,
     get_symbol_fm_factory,
+    logging_func
 )
 
 from src.sdk.helper import Helper
-from src.core.builder import Builder
+from src.core.build import Builder, stuff_atm, stuff_tradingsymbols
 from src.core.strategy import create_strategies_from_params
 from src.core.engine import Engine
 
@@ -16,6 +17,7 @@ from toolkit.kokoo import is_time_past, blink, kill_tmux
 from traceback import print_exc
 
 
+logging = logging_func(__name__)
 
 def read_builders():
     # login to broker api
@@ -61,11 +63,12 @@ def main():
             for builder in builders:
                 if builder.can_build():
                     data = stuff_atm(builder._data, builder._meta)
+                    print(data, builder._meta)
                     lst_of_params = stuff_tradingsymbols(data, builder._meta)
-
+                    print(lst_of_params)
                     strategies = create_strategies_from_params(lst_of_params)
+                    print(strategies)
                     engine.add_strategy(strategies)
-
                     builders.remove(builder)
 
             engine.tick(rest, quote)
